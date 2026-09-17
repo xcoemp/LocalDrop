@@ -1,0 +1,48 @@
+{
+  "name": "localdrop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zero-configuration LAN file and text transfer",
+  "type": "module",
+  "scripts": {
+    "typecheck": "vp exec vue-tsc --noEmit",
+    "tauri": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msvc-env.ps1 vp exec tauri",
+    "tauri:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msvc-env.ps1 vp exec tauri dev",
+    "tauri:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msvc-env.ps1 vp exec tauri build",
+    "android:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msvc-env.ps1 vp exec tauri android dev",
+    "android:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msvc-env.ps1 vp exec tauri android build",
+    "cargo": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msvc-env.ps1 cargo",
+    "cargo:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/msvc-env.ps1 cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-linux-android",
+    "deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1",
+    "deploy:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Target android",
+    "deploy:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Target windows",
+    "deploy:resign": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1 -SkipBuild",
+    "deploy:android:resign": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Target android -SkipBuild",
+    "deploy:android:debugkey": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Target android -AllowDebugKey",
+    "prepare": "vp config"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/plugin-clipboard-manager": "^2.2.0",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-fs": "^2.2.0",
+    "@tauri-apps/plugin-notification": "^2.2.0",
+    "@tauri-apps/plugin-opener": "^2.2.0",
+    "@tauri-apps/plugin-os": "^2.2.0",
+    "lucide-vue-next": "^0.468.0",
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@tauri-apps/cli": "^2.2.0",
+    "@types/node": "^26.5.1",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vue-tsc": "^3.3.11"
+  },
+  "packageManager": "pnpm@11.20.0"
+}

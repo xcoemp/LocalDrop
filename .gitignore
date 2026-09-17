@@ -1,0 +1,51 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+src-tauri/target/
+src-tauri/gen/
+
+# Vite+ task cache. `.vite-hooks/` and `AGENTS.md` are project config — commit those.
+.vite-plus/
+*.tsbuildinfo
+
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+.claude
+
+# Release signing material. Never commit: anyone with these can publish an
+# update that Android accepts as genuine. Keep them backed up somewhere else.
+*.jks
+*.keystore
+src-tauri/keystore.properties
+*.pfx
+*.p12
+
+# Signed, distributable build output from `pnpm deploy`. Regenerated on demand
+# and far too large for git; publish these as release assets instead.
+deploy/
+
+# Internal documentation, kept local rather than published. README.md is the
+# only doc that ships, so it has to stay self-sufficient: do not replace any of
+# its content with a link into one of these files.
+#
+#   docs/BUILDING.md        full build reference, disk budgets, NDK failure modes
+#   docs/USER_GUIDE.md      end-user guide
+#   docs/REQYUIREMENTS..md  product requirements document
+#   docs/BETA_TESTING.md    tester-facing QA checklist for the 1.0.0 beta
+#   docs/RELEASING.md       git/GitHub release and maintenance guide
+#
+# These exist only on this machine and nothing in git protects them --
+# back them up separately.
+#
+# Note src-tauri/android-kit/*.md is deliberately NOT ignored: those sit beside
+# the files they patch, and the Android build cannot be completed without them.
+docs/
+
+# NOTE: this also excludes README.md, so the repository would have NO landing
+# page or build instructions on GitHub at all. Delete this line to publish it.
+README.md

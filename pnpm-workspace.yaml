@@ -1,0 +1,18 @@
+# pnpm settings. As of pnpm 10.6+ these live here rather than in package.json.
+#
+# pnpm blocks dependency install scripts by default. These two need theirs:
+#   esbuild   — postinstall fetches the platform binary; Vite cannot build without it
+#   vue-demi  — postinstall patches itself for the installed Vue major version
+allowBuilds:
+  esbuild: true
+  vue-demi: true
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@0.3.0
+  vite-plus: 0.3.0
+overrides:
+  vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"

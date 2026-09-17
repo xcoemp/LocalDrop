@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "LocalDrop",
+  "version": "1.0.0",
+  "identifier": "app.localdrop",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "vp dev",
+    "beforeBuildCommand": "vp run typecheck && vp build"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "LocalDrop",
+        "width": 1180,
+        "height": 800,
+        "minWidth": 380,
+        "minHeight": 560,
+        "resizable": true,
+        "center": true,
+        "decorations": true,
+        "dragDropEnabled": true,
+        "theme": "Dark",
+        "backgroundColor": "#090D16"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "Zero-configuration LAN file transfer",
+    "longDescription": "LocalDrop moves files and text between devices on the same network. No accounts, no cloud, no internet required.",
+    "windows": {
+      "nsis": {
+        "installerHooks": "nsis/hooks.nsh",
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

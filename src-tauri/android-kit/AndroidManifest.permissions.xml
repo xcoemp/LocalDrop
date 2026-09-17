@@ -1,0 +1,28 @@
+<!--
+  PRD §7.2 — merge into gen/android/app/src/main/AndroidManifest.xml.
+
+  Permissions go directly inside <manifest>, before <application>.
+  The <service> declaration goes inside <application>.
+-->
+
+<!-- ===== inside <manifest> ===== -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+<!-- AND-1: required to hold a MulticastLock, without which inbound
+     UDP broadcast is silently dropped by power management. -->
+<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+<!-- AND-2: keeps the TCP socket alive while backgrounded. -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+<!-- AND-3: runtime prompt from API 33. Transfers still work if declined. -->
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<!-- ===== inside <application> ===== -->
+<service
+    android:name=".TransferService"
+    android:exported="false"
+    android:foregroundServiceType="dataSync" />

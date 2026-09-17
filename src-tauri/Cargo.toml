@@ -1,0 +1,68 @@
+[package]
+name = "localdrop"
+version = "1.0.0"
+description = "Zero-configuration LAN file and text transfer"
+authors = ["LocalDrop"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "localdrop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-os = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-opener = "2"
+
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+futures-lite = "2"
+async-walkdir = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+uuid = { version = "1", features = ["v4", "serde"] }
+url = "2"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+local-ip-address = "0.6"
+if-addrs = "0.13"
+sysinfo = { version = "0.33", default-features = false, features = ["disk"] }
+whoami = "1"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# JNI access for OpenableColumns.DISPLAY_NAME (real filenames for content URIs)
+# and Settings.Global.DEVICE_NAME.
+#
+# `tao` must resolve to the same version Tauri uses (0.35.3) so cargo unifies
+# the crate: its Android context registry is a static, and a second copy would
+# be empty. Do NOT use `ndk_context` here - nothing in this stack initializes it
+# and it panics at runtime.
+jni = "0.21"
+tao = "0.35"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
+
+[features]
+# Used by `tauri dev` / `tauri build` to strip devtools from release binaries.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
