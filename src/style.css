@@ -262,6 +262,22 @@
 .app-main {
   padding-top: calc(var(--header-h) + var(--safe-top));
   padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--spacing-space-md));
+
+  /* Containment guard, not a substitute for laying things out correctly.
+   *
+   * One over-wide child — a long filesystem path, an unbreakable URL — widens
+   * the whole page, and the symptom is not the child being clipped: everything
+   * else shifts left out of view, section headings included, and on a narrow
+   * window the navigation can go with it. That turns a cosmetic mistake into an
+   * unusable screen.
+   *
+   * `clip` rather than `hidden` deliberately: `overflow-x: hidden` forces the
+   * computed `overflow-y` to `auto`, which would make this a scroll container
+   * and put a second scrollbar inside the shell. `clip` constrains the axis
+   * without creating one. Safe on both targets — WebView2 and the Android
+   * WebView are both Chromium.
+   */
+  overflow-x: clip;
 }
 
 .app-gutter {
@@ -273,6 +289,29 @@
 @media (min-width: 1024px) {
   .app-main {
     padding-bottom: var(--spacing-space-xl);
+  }
+}
+
+/* Toast stack, inset-aware.
+ *
+ * Toasts are fixed bottom-right at z-70; the mobile bottom nav is at z-40. So
+ * a toast rendered at a plain `bottom: space-lg` sits directly on top of the
+ * navigation tabs and — because each toast is pointer-events-auto so it can be
+ * dismissed — swallows the taps meant for them. An error toast lasts 8 s,
+ * which is 8 s of a dead navigation bar.
+ *
+ * Mirrors `.app-main`: clear the nav height plus the system gesture inset on
+ * mobile, and drop the reservation at lg where the nav is a left rail and
+ * there is no bottom bar to avoid.
+ */
+.toast-stack {
+  bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--spacing-space-md));
+  right: max(var(--spacing-space-lg), var(--safe-right));
+}
+
+@media (min-width: 1024px) {
+  .toast-stack {
+    bottom: var(--spacing-space-lg);
   }
 }
 

@@ -5,12 +5,49 @@
   Author:  Emmanuel Paul <pauldukz@gmail.com>
 -->
 <script setup lang="ts">
+import { ref } from "vue";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { CircleAlert, CircleCheck, Info, X } from "lucide-vue-next";
 
-import { useTransferStore } from "@/stores/useTransferStore";
+import { useTransferStore, type Toast } from "@/stores/useTransferStore";
 
 /** FR-5.6 — transient feedback; the durable record lives in history. */
 const transfers = useTransferStore();
+
+/**
+ * Which toast last had its details copied, so the button can confirm.
+ *
+ * Tracked by id rather than a boolean because several error toasts can be
+ * stacked at once, and a shared flag would make every one of them claim to
+ * have been copied.
+ */
+const copiedId = ref<number | null>(null);
+
+/**
+ * Put the technical cause on the clipboard: the code, the message the user
+ * saw, and the raw detail if there was one.
+ *
+ * Assembled into one block so a bug report carries all three together —
+ * pasting only the code loses what the user was told, and pasting only the
+ * message loses the part that identifies the failure in the source.
+ */
+async function copyDetails(toast: Toast) {
+  const lines = [toast.code, toast.title, toast.detail].filter(Boolean);
+
+  try {
+    await writeText(lines.join("\n"));
+    copiedId.value = toast.id;
+    // Reverted so the button does not read "Copied" for the rest of the
+    // toast's life, which would be wrong if it were clicked again.
+    setTimeout(() => {
+      if (copiedId.value === toast.id) copiedId.value = null;
+    }, 2000);
+  } catch {
+    // The clipboard can be locked by another process on Windows. Nothing to
+    // report — the label simply does not change, and the title attribute
+    // still shows the code for manual transcription.
+  }
+}
 
 /**
  * Lookup tables rather than `switch` or a `v-if` chain.
@@ -39,11 +76,17 @@ const accents = {
     toast: the stack spans a wide fixed region, and without this the empty space
     beside a toast would swallow clicks meant for the UI underneath.
 
+    That only covers the empty space, though — a toast itself must stay
+    clickable to be dismissed, so it still blocks whatever is under it. Hence
+    `.toast-stack` (style.css) rather than a plain `bottom-*`: on mobile it
+    offsets the whole stack above the bottom navigation and the system gesture
+    inset, so the two never occupy the same pixels.
+
     aria-live="polite" announces new toasts to a screen reader without
     interrupting whatever is being read (UI-7).
   -->
   <div
-    class="pointer-events-none fixed bottom-space-lg right-space-lg z-70 flex w-full max-w-sm flex-col gap-space-sm"
+    class="toast-stack pointer-events-none fixed z-70 flex w-full max-w-sm flex-col gap-space-sm"
     role="status"
     aria-live="polite"
   >
@@ -83,13 +126,20 @@ const accents = {
           </span>
 
           <!--
-            FR-5.6 — the error code, present only on failures. `data-selectable`
-            re-enables text selection (the app disables it globally to feel
-            native) precisely so this code can be copied into a bug report.
+            FR-5.6's copyable error code, as an action rather than visible text.
+            Showing `ERR_WRITE_FAILED` on screen told the user nothing they
+            could act on and read as leaked debug output, but support still
+            needs it — so it moves behind one click.
           -->
-          <span v-if="toast.code" data-selectable class="telemetry text-outline">
-            {{ toast.code }}
-          </span>
+          <button
+            v-if="toast.code"
+            type="button"
+            class="mt-0.5 self-start rounded-sm font-label-sm text-label-sm text-outline underline decoration-dotted underline-offset-2 transition-colors hover:text-on-surface-variant"
+            :title="`Copy technical details (${toast.code})`"
+            @click="copyDetails(toast)"
+          >
+            {{ copiedId === toast.id ? "Copied" : "Copy details" }}
+          </button>
         </div>
 
         <!-- Manual dismissal, in addition to the store's TTL timer. -->

@@ -15,6 +15,7 @@ import EmptyState from "@/components/EmptyState.vue";
 import FileBrowser from "@/components/FileBrowser.vue";
 import OsIcon from "@/components/OsIcon.vue";
 import { fileName, truncateMiddle } from "@/composables/useFormat";
+import { pickerStartDir } from "@/composables/usePickerDir";
 import { usePeerStore } from "@/stores/usePeerStore";
 import { useTransferStore } from "@/stores/useTransferStore";
 
@@ -24,7 +25,16 @@ import { useTransferStore } from "@/stores/useTransferStore";
  * Files are queued locally first so the user can review the batch before it
  * leaves the machine — a send is not undoable.
  */
-const emit = defineEmits<{ sendText: [deviceId: string] }>();
+const emit = defineEmits<{
+  sendText: [deviceId: string];
+  /**
+   * A transfer was accepted into the queue. The shell switches to Transfer
+   * Streams on this, so the progress the user just triggered is visible without
+   * them having to go looking for it — this screen shows nothing after a
+   * successful dispatch, which read as though the button had done nothing.
+   */
+  sent: [];
+}>();
 
 const peers = usePeerStore();
 const transfers = useTransferStore();
@@ -86,7 +96,15 @@ async function browseFiles() {
     return;
   }
 
-  const picked = await open({ multiple: true, directory: false, title: "Select files to send" });
+  const picked = await open({
+    multiple: true,
+    directory: false,
+    title: "Select files to send",
+    // Without this the dialog opens in the app's own install directory on an
+    // installed Windows build. `undefined` when nothing resolves, which the
+    // plugin treats as "no preference".
+    defaultPath: await pickerStartDir(),
+  });
 
   // Null means the user cancelled the dialog — not an error, and not a reason
   // to disturb an already-queued batch.
@@ -111,7 +129,12 @@ async function browseFolder() {
     browseDevice("directory");
     return;
   }
-  const picked = await open({ multiple: false, directory: true, title: "Select a folder to send" });
+  const picked = await open({
+    multiple: false,
+    directory: true,
+    title: "Select a folder to send",
+    defaultPath: await pickerStartDir(),
+  });
 
   // Cancelled, or — defensively — an array from a plugin configured for single
   // selection. An array here would queue a nested value the backend cannot read.
@@ -167,6 +190,11 @@ async function dispatch() {
     // Emptied only on success — Rust has taken ownership of the batch by then.
     // On failure the queue survives so the user can retry without re-picking.
     queue.value = [];
+
+    // Only on success, and only after the queue is cleared: a failed dispatch
+    // leaves the user here with their batch intact and the error toast in view,
+    // which is where they need to be to retry.
+    emit("sent");
   } catch (error) {
     const payload = error as { message?: string; code?: string };
     transfers.toast({
@@ -305,9 +333,16 @@ async function dispatch() {
         <div
           v-for="(path, index) in queue"
           :key="`${path}-${index}`"
-          class="flex items-center justify-between gap-space-sm rounded-sm px-space-sm py-space-xs hover:bg-surface-container"
+          class="flex items-start justify-between gap-space-sm rounded-sm px-space-sm py-space-xs hover:bg-surface-container"
         >
-          <span class="truncate font-body-md text-body-md text-on-surface">
+          <!--
+            The queued name wraps. Truncating it here was the worst place for
+            it: this is the list a user checks before committing to a send, and
+            two files whose names differ only past the cut looked like the same
+            file queued twice. `min-w-0` is required because a flex item will
+            not otherwise shrink below its content.
+          -->
+          <span class="min-w-0 wrap-anywhere font-body-md text-body-md text-on-surface">
             {{ queueLabel(path) }}
           </span>
           <div class="flex shrink-0 items-center gap-space-sm">

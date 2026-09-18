@@ -128,19 +128,31 @@ onBeforeUnmount(() => window.clearInterval(timer));
           snippet offer carries no names, and an empty bordered box would look
           like a loading failure.
         -->
+        <!--
+          `max-h` + `overflow-y-auto` because the names below wrap. This sheet
+          has no scroll container of its own, so a preview of long filenames on
+          a phone would make it taller than the viewport and carry Accept and
+          Decline off the bottom — leaving the user unable to answer an offer
+          that expires in 30 s (FR-4.2). Bounding the list keeps the decision
+          reachable whatever the names look like.
+        -->
         <ul
           v-if="offer.preview.length"
-          class="flex flex-col gap-1 rounded-md bg-surface-container-lowest p-space-sm"
+          class="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md bg-surface-container-lowest p-space-sm"
         >
           <!--
             Repetition over the truncated preview Rust sent, not the whole
             manifest: SEC-2 caps a manifest at 100,000 entries, and rendering
             even a fraction of that into a modal would hang the webview.
+
+            Each name wraps rather than being clipped: this list is the only
+            thing the user has to judge an incoming transfer by before accepting
+            it, so a name whose tail is cut off defeats the point of showing it.
           -->
           <li
             v-for="name in offer.preview"
             :key="name"
-            class="truncate font-body-sm text-body-sm text-on-surface-variant"
+            class="wrap-anywhere font-body-sm text-body-sm text-on-surface-variant"
           >
             {{ name }}
           </li>

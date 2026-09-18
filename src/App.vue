@@ -125,7 +125,11 @@ onMounted(async () => {
           @send-files="startFileSend"
           @send-text="openTextModal"
         />
-        <SendView v-else-if="view === 'send'" @send-text="openTextModal" />
+        <SendView
+          v-else-if="view === 'send'"
+          @send-text="openTextModal"
+          @sent="view = 'transfers'"
+        />
         <TransferCenter v-else-if="view === 'transfers'" />
         <SettingsView v-else />
       </div>

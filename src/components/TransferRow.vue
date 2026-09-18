@@ -9,13 +9,7 @@
 import { computed } from "vue";
 import { ArrowDownToLine, ArrowUpFromLine, Ban, CircleCheck, CircleX, X } from "lucide-vue-next";
 
-import {
-  formatBytes,
-  formatEta,
-  formatPercent,
-  formatRate,
-  truncateMiddle,
-} from "@/composables/useFormat";
+import { formatBytes, formatEta, formatPercent, formatRate } from "@/composables/useFormat";
 import { useTransferStore } from "@/stores/useTransferStore";
 import type { TransferSnapshot } from "@/types/protocol";
 
@@ -106,7 +100,9 @@ const barClass = computed(() => {
 <template>
   <div class="flex flex-col gap-space-sm rounded-lg bg-surface-container-low p-space-md">
     <div class="flex items-start justify-between gap-space-md">
-      <div class="flex min-w-0 items-center gap-space-sm">
+      <!-- `items-start` so the icon tile stays beside the first line of a
+           filename that wraps, rather than drifting to the block's centre. -->
+      <div class="flex min-w-0 items-start gap-space-sm">
         <div
           class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-surface-container-high"
           :class="accent"
@@ -139,11 +135,17 @@ const barClass = computed(() => {
           <!--
             The current file while transferring, falling back to the batch label
             before the first file opens or after the last one closes.
+
+            Wraps instead of truncating. This name changes as the batch advances
+            and is the only indication of *which* file is moving, so clipping
+            its tail on a narrow screen removes the one fact the line exists to
+            convey. `wrap-anywhere` because filenames frequently contain no
+            break opportunity at all.
           -->
-          <span class="truncate font-label-md text-label-md text-on-surface">
-            {{ truncateMiddle(transfer.currentFile || transfer.label, 44) }}
+          <span class="wrap-anywhere font-label-md text-label-md text-on-surface">
+            {{ transfer.currentFile || transfer.label }}
           </span>
-          <span class="telemetry text-on-surface-variant">
+          <span class="telemetry wrap-anywhere text-on-surface-variant">
             {{ transfer.direction === "incoming" ? "from" : "to" }}
             {{ transfer.peerAlias }} · {{ phaseLabel }}
           </span>
