@@ -49,6 +49,7 @@ function field<K extends keyof Settings>(key: K) {
 const autoAccept = field("autoAccept");
 const autoCopySnippets = field("autoCopySnippets");
 const completionSound = field("completionSound");
+const transferStartSound = field("transferStartSound");
 const launchMinimized = field("launchMinimized");
 const organizeBySender = field("organizeBySender");
 const organizeByFileType = field("organizeByFileType");
@@ -330,6 +331,19 @@ async function reset() {
           </span>
         </div>
         <ToggleSwitch v-model="completionSound" label="Play completion sound" />
+      </div>
+
+      <!-- Placed directly after the completion sound, since the two are the
+           same kind of choice and are most easily understood as a pair. -->
+      <div class="flex items-start justify-between gap-space-md">
+        <div class="flex flex-col">
+          <span class="font-label-md text-label-md text-on-surface">Play start sound</span>
+          <span class="font-body-sm text-body-sm text-on-surface-variant">
+            A lower tone when a transfer begins. Useful with auto-accept on, where files otherwise
+            start arriving silently.
+          </span>
+        </div>
+        <ToggleSwitch v-model="transferStartSound" label="Play start sound" />
       </div>
 
       <!-- AND-2: Android only; desktop processes are not suspended. -->

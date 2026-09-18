@@ -46,6 +46,13 @@ pub struct Settings {
     pub auto_accept: bool,
     pub auto_copy_snippets: bool,
     pub completion_sound: bool,
+    /// FR-6.3's companion — a short tone the moment bytes begin moving.
+    ///
+    /// Off by default, unlike `completion_sound`. A start cue is most useful to
+    /// a receiver running with auto-accept on, where a transfer otherwise begins
+    /// with no indication at all; for everyone else it is one more noise per
+    /// transfer, and an existing install should not suddenly acquire it.
+    pub transfer_start_sound: bool,
     pub launch_minimized: bool,
     pub organize_by_sender: bool,
     pub organize_by_file_type: bool,
@@ -65,6 +72,7 @@ impl Default for Settings {
             auto_accept: false,
             auto_copy_snippets: true,
             completion_sound: true,
+            transfer_start_sound: false,
             launch_minimized: false,
             organize_by_sender: false,
             organize_by_file_type: false,

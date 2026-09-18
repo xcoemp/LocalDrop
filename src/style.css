@@ -160,6 +160,18 @@
 
     --header-h: 4rem;
     --bottom-nav-h: 3.75rem;
+
+    /* Height of the Android soft keyboard, overwritten as an inline style on
+     * <html> by MainActivity.onWebViewCreate. There is no CSS or JS route to
+     * this figure: the webview is not resized for the IME under edge-to-edge,
+     * so `env()`, `dvh` units and `visualViewport` all report a viewport that
+     * still includes the area the keyboard covers.
+     *
+     * The 0px default is what desktop and any build without the native hook
+     * use, so a missing value degrades to today's behaviour rather than to a
+     * broken layout.
+     */
+    --keyboard-h: 0px;
   }
 
   html,
@@ -250,7 +262,15 @@
  * inset is irrelevant, but harmless.
  */
 .sheet-safe {
-  padding-bottom: calc(var(--spacing-space-lg) + var(--safe-bottom));
+  /* `max()`, not a sum: the IME inset already spans the area the navigation bar
+   * occupies, because the keyboard is drawn over it. Adding the two would clear
+   * the nav bar twice and leave a gap the height of it between the sheet's
+   * buttons and the keyboard.
+   *
+   * With the keyboard closed `--keyboard-h` is 0px and this reduces exactly to
+   * the previous `space-lg + safe-bottom`.
+   */
+  padding-bottom: calc(var(--spacing-space-lg) + max(var(--safe-bottom), var(--keyboard-h)));
 }
 
 /* Layout shell, inset-aware.
@@ -306,6 +326,21 @@
  */
 .toast-stack {
   bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--spacing-space-md));
+
+  /* Both edges anchored, not just the right one.
+   *
+   * With only `right` set, the stack's own `w-full` resolved to 100% of the
+   * viewport and the right offset pushed that whole width leftwards — so the
+   * toast overhung the *left* edge and its rounded corner was sliced off, while
+   * the right side sat neatly inset. The wider the offset, the further off the
+   * screen it went.
+   *
+   * Anchoring left and right instead lets the width fall out of the space that
+   * is actually available, so the gutters are equal by construction and match
+   * the `space-lg` that `.app-gutter` uses for the cards behind it. `max()`
+   * against the safe-area insets keeps it clear of a notch in landscape.
+   */
+  left: max(var(--spacing-space-lg), var(--safe-left));
   right: max(var(--spacing-space-lg), var(--safe-right));
 }
 

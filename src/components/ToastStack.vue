@@ -5,49 +5,12 @@
   Author:  Emmanuel Paul <pauldukz@gmail.com>
 -->
 <script setup lang="ts">
-import { ref } from "vue";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { CircleAlert, CircleCheck, Info, X } from "lucide-vue-next";
 
-import { useTransferStore, type Toast } from "@/stores/useTransferStore";
+import { useTransferStore } from "@/stores/useTransferStore";
 
 /** FR-5.6 — transient feedback; the durable record lives in history. */
 const transfers = useTransferStore();
-
-/**
- * Which toast last had its details copied, so the button can confirm.
- *
- * Tracked by id rather than a boolean because several error toasts can be
- * stacked at once, and a shared flag would make every one of them claim to
- * have been copied.
- */
-const copiedId = ref<number | null>(null);
-
-/**
- * Put the technical cause on the clipboard: the code, the message the user
- * saw, and the raw detail if there was one.
- *
- * Assembled into one block so a bug report carries all three together —
- * pasting only the code loses what the user was told, and pasting only the
- * message loses the part that identifies the failure in the source.
- */
-async function copyDetails(toast: Toast) {
-  const lines = [toast.code, toast.title, toast.detail].filter(Boolean);
-
-  try {
-    await writeText(lines.join("\n"));
-    copiedId.value = toast.id;
-    // Reverted so the button does not read "Copied" for the rest of the
-    // toast's life, which would be wrong if it were clicked again.
-    setTimeout(() => {
-      if (copiedId.value === toast.id) copiedId.value = null;
-    }, 2000);
-  } catch {
-    // The clipboard can be locked by another process on Windows. Nothing to
-    // report — the label simply does not change, and the title attribute
-    // still shows the code for manual transcription.
-  }
-}
 
 /**
  * Lookup tables rather than `switch` or a `v-if` chain.
@@ -84,9 +47,15 @@ const accents = {
 
     aria-live="polite" announces new toasts to a screen reader without
     interrupting whatever is being read (UI-7).
+
+    No `w-full`: `.toast-stack` anchors both left and right, so the width comes
+    from the space between them. `w-full` would force 100% of the viewport on
+    top of those offsets and push the stack off the left edge — see the note in
+    style.css. `max-w-sm` then caps it on a desktop window, and `ml-auto` sends
+    the slack to the left so it stays bottom-right there.
   -->
   <div
-    class="toast-stack pointer-events-none fixed z-70 flex w-full max-w-sm flex-col gap-space-sm"
+    class="toast-stack pointer-events-none fixed z-70 ml-auto flex max-w-sm flex-col gap-space-sm"
     role="status"
     aria-live="polite"
   >
@@ -126,20 +95,16 @@ const accents = {
           </span>
 
           <!--
-            FR-5.6's copyable error code, as an action rather than visible text.
-            Showing `ERR_WRITE_FAILED` on screen told the user nothing they
-            could act on and read as leaked debug output, but support still
-            needs it — so it moves behind one click.
+            No copy-details action here, deliberately.
+
+            A toast lasts a few seconds and can be one of a stack of three; an
+            action inside it is something the user has to catch before it
+            disappears, which makes it a poor home for anything worth keeping.
+            `toast.code` and `toast.detail` are still carried on the payload and
+            are still reachable — HistoryRow exposes them on the matching entry,
+            which persists and can be read at leisure. So the toast stays a
+            plain statement of what happened.
           -->
-          <button
-            v-if="toast.code"
-            type="button"
-            class="mt-0.5 self-start rounded-sm font-label-sm text-label-sm text-outline underline decoration-dotted underline-offset-2 transition-colors hover:text-on-surface-variant"
-            :title="`Copy technical details (${toast.code})`"
-            @click="copyDetails(toast)"
-          >
-            {{ copiedId === toast.id ? "Copied" : "Copy details" }}
-          </button>
         </div>
 
         <!-- Manual dismissal, in addition to the store's TTL timer. -->

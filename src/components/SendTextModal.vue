@@ -173,8 +173,14 @@ async function send() {
       @click.self="emit('close')"
       @keydown.esc="emit('close')"
     >
+      <!--
+        `max-h-dvh` bounds the sheet to the viewport. `.sheet-safe` grows its
+        bottom padding by the keyboard height, and without a ceiling that extra
+        height would push the heading and the textarea off the *top* of the
+        screen instead — trading one invisible half of the sheet for the other.
+      -->
       <div
-        class="flex w-full max-w-xl flex-col gap-space-md rounded-t-xl border border-white/15 bg-surface-container p-space-lg sheet-safe sm:rounded-xl"
+        class="flex max-h-dvh w-full max-w-xl flex-col gap-space-md rounded-t-xl border border-white/15 bg-surface-container p-space-lg sheet-safe sm:rounded-xl"
       >
         <header class="flex items-start justify-between gap-space-md">
           <div class="flex flex-col">
@@ -209,6 +215,14 @@ async function send() {
           above for the IME reason. Both events are bound: `input` covers
           ordinary typing and paste, `compositionupdate` covers the Android
           predictive keyboard's uncommitted word.
+
+          `min-h-0` is what makes the textarea the part that gives way when the
+          keyboard squeezes the sheet. A flex item defaults to `min-height:
+          auto`, which refuses to shrink below its content — here seven rows —
+          so without it the sheet would overflow and something else would have
+          to go off-screen. With it, the header, the Paste button and Send all
+          stay put and the typing area gets smaller, which is the right thing to
+          sacrifice; `overflow-y-auto` keeps the text scrollable at any height.
         -->
         <textarea
           ref="textarea"
@@ -218,7 +232,7 @@ async function send() {
           @compositionupdate="syncText"
           data-selectable
           placeholder="Paste a URL, a token, a snippet of code… or several"
-          class="w-full resize-none rounded-md border border-outline-variant/40 bg-surface-container-lowest p-space-md font-body-md text-body-md text-on-surface placeholder:text-outline focus:border-secondary-container focus:outline-none"
+          class="min-h-0 w-full resize-none overflow-y-auto rounded-md border border-outline-variant/40 bg-surface-container-lowest p-space-md font-body-md text-body-md text-on-surface placeholder:text-outline focus:border-secondary-container focus:outline-none"
         />
 
         <div class="flex items-center justify-between gap-space-md">

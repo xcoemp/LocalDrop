@@ -130,6 +130,8 @@ export interface Settings {
   autoAccept: boolean;
   autoCopySnippets: boolean;
   completionSound: boolean;
+  /** A short tone when a transfer starts moving. Opt-in; see `settings.rs`. */
+  transferStartSound: boolean;
   launchMinimized: boolean;
   organizeBySender: boolean;
   organizeByFileType: boolean;
