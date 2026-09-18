@@ -13,7 +13,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { platform } from "@tauri-apps/plugin-os";
 import { ArrowDownToLine, ArrowUpFromLine, Copy, FolderOpen } from "lucide-vue-next";
 
-import { formatBytes, formatRelativeTime, truncateMiddle } from "@/composables/useFormat";
+import { formatBytes, formatRelativeTime } from "@/composables/useFormat";
 import { useTransferStore } from "@/stores/useTransferStore";
 import type { HistoryEntry } from "@/types/protocol";
 
@@ -76,13 +76,39 @@ async function copyText() {
   // FR-3.3 — a copy is silent otherwise, so confirm it happened.
   transfers.toast({ kind: "success", title: "Copied to clipboard" });
 }
+
+/** Briefly swaps the error line for a confirmation after copying. */
+const copiedError = ref(false);
+
+/**
+ * Copy the failure's code alongside the message the user actually saw.
+ *
+ * Confirmed in place rather than with a toast: this is itself an error row, and
+ * raising a success toast on top of an error the user is reading is noisier
+ * than briefly relabelling the line they just clicked.
+ */
+async function copyError() {
+  const lines = [props.entry.errorCode, props.entry.errorMessage].filter(Boolean);
+  if (lines.length === 0) return;
+
+  try {
+    await writeText(lines.join("\n"));
+    copiedError.value = true;
+    setTimeout(() => (copiedError.value = false), 2000);
+  } catch {
+    // Clipboard unavailable. The title attribute still carries the code.
+  }
+}
 </script>
 
 <template>
   <div
-    class="flex items-center justify-between gap-space-md rounded-md bg-surface-container-lowest px-space-md py-space-sm"
+    class="flex items-start justify-between gap-space-md rounded-md bg-surface-container-lowest px-space-md py-space-sm"
   >
-    <div class="flex min-w-0 items-center gap-space-sm">
+    <!-- `items-start`, not `items-center`: now that the name can run to two or
+         three lines, centring would float the arrow and the action buttons in
+         the middle of a tall block, away from the line they belong to. -->
+    <div class="flex min-w-0 items-start gap-space-sm">
       <!--
         Direction picks the arrow, outcome picks its colour. Unlike TransferRow,
         history keeps the directional arrow even for failures: in a mixed log,
@@ -92,24 +118,48 @@ async function copyText() {
       <component
         :is="entry.direction === 'incoming' ? ArrowDownToLine : ArrowUpFromLine"
         :size="16"
+        class="mt-0.5 shrink-0"
         :class="outcomeClass[entry.outcome]"
       />
       <div class="flex min-w-0 flex-col">
-        <span class="truncate font-label-md text-label-md text-on-surface">
-          {{ truncateMiddle(entry.label, 40) }}
+        <!--
+          The name wraps rather than being cut off. It used to be clipped twice
+          over — `truncateMiddle` to 40 characters and a CSS `truncate` behind
+          it — so on a phone anything longer than the column lost its end, which
+          is where the extension and the distinguishing part of a filename
+          usually are. Two files differing only in a suffix read identically.
+
+          `wrap-anywhere` rather than `break-words`: filenames often have no
+          spaces at all, and only `overflow-wrap: anywhere` both breaks such a
+          run and reports a min-content width small enough that the row cannot
+          push the page wide.
+        -->
+        <span class="wrap-anywhere font-label-md text-label-md text-on-surface">
+          {{ entry.label }}
         </span>
-        <span class="telemetry text-on-surface-variant">
+        <span class="telemetry wrap-anywhere text-on-surface-variant">
           {{ entry.direction === "incoming" ? "from" : "to" }} {{ entry.peerAlias }} ·
           {{ formatBytes(entry.totalBytes) }} · {{ formatRelativeTime(entry.finishedAt) }}
         </span>
         <!--
-          FR-5.6 — the cause, plus a copyable code. Present only for failures;
-          `errorMessage` and `errorCode` are both null for every other outcome.
+          FR-5.6 — the cause. Present only for failures; `errorMessage` and
+          `errorCode` are both null for every other outcome.
+
+          The code is no longer printed beside the message: "(ERR_WRITE_FAILED)"
+          after a sentence that already explains the problem read as debug
+          output leaking into the UI. It moves into the tooltip and the click
+          action, so it is still one gesture away when someone needs to report
+          the failure.
         -->
-        <span v-if="entry.errorMessage" class="font-body-sm text-body-sm text-error">
-          {{ entry.errorMessage }}
-          <span class="telemetry text-outline">({{ entry.errorCode }})</span>
-        </span>
+        <button
+          v-if="entry.errorMessage"
+          type="button"
+          class="text-left font-body-sm text-body-sm text-error transition-opacity hover:opacity-80"
+          :title="`${entry.errorCode ?? 'Error'} — click to copy details`"
+          @click="copyError"
+        >
+          {{ copiedError ? "Details copied to clipboard" : entry.errorMessage }}
+        </button>
       </div>
     </div>
 

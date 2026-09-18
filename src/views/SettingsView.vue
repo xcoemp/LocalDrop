@@ -14,6 +14,7 @@ import { BatteryCharging, FolderOpen, RotateCcw, ShieldAlert } from "lucide-vue-
 
 import FileBrowser from "@/components/FileBrowser.vue";
 import ToggleSwitch from "@/components/ToggleSwitch.vue";
+import { pickerStartDir } from "@/composables/usePickerDir";
 import { usePeerStore } from "@/stores/usePeerStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useTransferStore } from "@/stores/useTransferStore";
@@ -48,6 +49,7 @@ function field<K extends keyof Settings>(key: K) {
 const autoAccept = field("autoAccept");
 const autoCopySnippets = field("autoCopySnippets");
 const completionSound = field("completionSound");
+const transferStartSound = field("transferStartSound");
 const launchMinimized = field("launchMinimized");
 const organizeBySender = field("organizeBySender");
 const organizeByFileType = field("organizeByFileType");
@@ -102,7 +104,16 @@ async function pickDownloadDir() {
     browserOpen.value = true;
     return;
   }
-  const picked = await open({ directory: true, multiple: false, title: "Choose download folder" });
+  const picked = await open({
+    directory: true,
+    multiple: false,
+    title: "Choose download folder",
+    // Starts at the folder currently in use rather than the app's install
+    // directory, so "change this slightly" does not mean navigating from
+    // scratch. Falls back to Downloads when the configured path has since been
+    // deleted, which `open` would otherwise treat as no preference at all.
+    defaultPath: settings.settings?.downloadDirectory || (await pickerStartDir()),
+  });
   // Cancelled, or an unexpected array; either way there is nothing to apply.
   if (!picked || Array.isArray(picked)) return;
   await applyDownloadDir(picked);
@@ -246,17 +257,36 @@ async function reset() {
         <span class="font-label-md text-label-md text-on-surface-variant">
           Default download directory
         </span>
-        <div class="flex items-center gap-space-sm">
+        <!--
+          Stacks below sm, side by side above it.
+
+          Sharing one row with Browse left the path perhaps 180px on a phone,
+          which truncated even a short "C:\Users\User\Downloads\LocalDrop" —
+          and this is the one screen whose whole purpose is to tell the user
+          where their files go. Dropping the button onto its own line gives the
+          path the full width, and the path then wraps to as many lines as it
+          needs rather than being cut.
+        -->
+        <div class="flex flex-col items-start gap-space-sm sm:flex-row sm:items-center">
+          <!--
+            `w-full` *and* `sm:flex-1`, which are not redundant: in the stacked
+            column layout `flex-1` would grow the box vertically, since it acts
+            on the main axis — only `w-full` makes it span the row. Above sm the
+            main axis is horizontal and `flex-1` is what claims the space Browse
+            leaves over.
+          -->
           <span
             data-selectable
-            class="flex-1 truncate rounded-md bg-surface-container-lowest px-space-md py-space-sm font-body-md text-body-md text-on-surface"
+            class="w-full min-w-0 wrap-anywhere rounded-md bg-surface-container-lowest px-space-md py-space-sm font-body-md text-body-md text-on-surface sm:flex-1"
             :title="settings.settings.downloadDirectory"
           >
             {{ settings.settings.downloadDirectory }}
           </span>
+          <!-- `shrink-0` so the button keeps its label intact once it is back
+               on the same row as the path above sm. -->
           <button
             type="button"
-            class="flex items-center gap-space-xs rounded-md bg-surface-container-high px-space-md py-space-sm font-label-md text-label-md text-on-surface hover:bg-surface-bright"
+            class="flex shrink-0 items-center gap-space-xs rounded-md bg-surface-container-high px-space-md py-space-sm font-label-md text-label-md text-on-surface hover:bg-surface-bright"
             @click="pickDownloadDir"
           >
             <FolderOpen :size="16" />
@@ -301,6 +331,19 @@ async function reset() {
           </span>
         </div>
         <ToggleSwitch v-model="completionSound" label="Play completion sound" />
+      </div>
+
+      <!-- Placed directly after the completion sound, since the two are the
+           same kind of choice and are most easily understood as a pair. -->
+      <div class="flex items-start justify-between gap-space-md">
+        <div class="flex flex-col">
+          <span class="font-label-md text-label-md text-on-surface">Play start sound</span>
+          <span class="font-body-sm text-body-sm text-on-surface-variant">
+            A lower tone when a transfer begins. Useful with auto-accept on, where files otherwise
+            start arriving silently.
+          </span>
+        </div>
+        <ToggleSwitch v-model="transferStartSound" label="Play start sound" />
       </div>
 
       <!-- AND-2: Android only; desktop processes are not suspended. -->

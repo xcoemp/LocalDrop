@@ -26,8 +26,21 @@ export interface Toast {
   kind: "info" | "success" | "error";
   title: string;
   body?: string;
-  /** FR-5.6 — the copyable error code, shown behind a "details" affordance. */
+  /**
+   * FR-5.6 — the error code. Never rendered as visible text: `ERR_WRITE_FAILED`
+   * means nothing to the person reading it, and testers reported it as the app
+   * "showing debug output". It is carried here so the copy-details action can
+   * include it, and so support still has it.
+   */
   code?: string;
+  /**
+   * The raw technical cause — an OS error string such as "An existing
+   * connection was forcibly closed by the remote host (os error 10054)".
+   *
+   * Also never rendered. It used to be passed as `body`, which put exactly that
+   * text in front of users; `title` already says the same thing in English.
+   */
+  detail?: string;
 }
 
 /**
@@ -121,9 +134,15 @@ export const useTransferStore = defineStore("transfers", () => {
   }
 
   function applyError(payload: TransferErrorPayload) {
-    // FR-5.6 — human-readable cause, copyable code, optional detail. A longer
-    // 8 s TTL than a normal toast: an error is worth reading twice, and it
-    // carries a code the user may want to write down.
+    // FR-5.6 — the human-readable cause is the only thing shown. A longer 8 s
+    // TTL than a normal toast: an error is worth reading twice.
+    //
+    // `detail` is deliberately NOT passed as `body`. It used to be, which meant
+    // a dropped connection rendered the raw OS string "An existing connection
+    // was forcibly closed by the remote host (os error 10054)" underneath a
+    // title that already said "Connection to <device> dropped mid-transfer."
+    // The first line is the answer; the second was noise that read as a crash.
+    // Both code and detail travel on the toast for the copy action instead.
     toast(
       {
         kind: "error",
@@ -131,7 +150,7 @@ export const useTransferStore = defineStore("transfers", () => {
         code: payload.code,
         // Normalised from null to undefined so the optional property is simply
         // absent rather than present-and-empty.
-        body: payload.detail ?? undefined,
+        detail: payload.detail ?? undefined,
       },
       8000,
     );

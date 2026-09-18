@@ -74,22 +74,57 @@ watch(
   },
 );
 
-/** FR-3.2 — clipboard to composer in one action. */
+/**
+ * FR-3.2 — clipboard to composer in one action.
+ *
+ * **Appends** rather than replaces. Replacing meant the button could only ever
+ * be used once per snippet: copy a link, paste, copy a second link, paste, and
+ * the first one was silently gone. Collecting several clippings into one
+ * transfer is the common case — a few links, a command and its output, two
+ * codes — and appending makes that possible without retyping anything.
+ *
+ * It is also the safer direction. Appending never destroys what is already in
+ * the box, so a mis-click costs one selection to delete rather than everything
+ * the user had assembled.
+ */
 async function paste() {
   try {
     const clip = await readText();
-    // Guarded: an empty clipboard returns "" or null, and assigning that would
-    // wipe text the user had already typed — a paste that destroys input is
-    // worse than one that does nothing.
-    if (clip) text.value = clip;
+
+    // Guarded: an empty clipboard returns "" or null, and appending that would
+    // add a separator and nothing else.
+    if (clip) {
+      const current = text.value;
+
+      // A newline between clippings, so a list of links or codes arrives one
+      // per line rather than run together into one unreadable string.
+      //
+      // Skipped when the box is empty or whitespace-only (nothing to separate
+      // from, and a leading blank line looks like a mistake), and when the text
+      // already ends in a newline (the user's own line break is enough).
+      const needsBreak = current.trim().length > 0 && !current.endsWith("\n");
+
+      text.value = current + (needsBreak ? "\n" : "") + clip;
+    }
   } catch {
     // The clipboard can be denied or held by another process; say so rather
     // than leaving the button looking broken.
     transfers.toast({ kind: "error", title: "Couldn't read the clipboard." });
   }
+
   // Focus is restored on both paths, so the user can keep editing either way.
   await nextTick();
   textarea.value?.focus();
+
+  // Caret to the end, and scrolled into view. Without this the cursor stays
+  // where it was before the paste — so continued typing would be inserted in
+  // the middle of the text that was just added, and a long accumulation would
+  // grow off-screen with no indication anything had happened.
+  const el = textarea.value;
+  if (el) {
+    el.setSelectionRange(el.value.length, el.value.length);
+    el.scrollTop = el.scrollHeight;
+  }
 }
 
 async function send() {
@@ -138,8 +173,14 @@ async function send() {
       @click.self="emit('close')"
       @keydown.esc="emit('close')"
     >
+      <!--
+        `max-h-dvh` bounds the sheet to the viewport. `.sheet-safe` grows its
+        bottom padding by the keyboard height, and without a ceiling that extra
+        height would push the heading and the textarea off the *top* of the
+        screen instead — trading one invisible half of the sheet for the other.
+      -->
       <div
-        class="flex w-full max-w-xl flex-col gap-space-md rounded-t-xl border border-white/15 bg-surface-container p-space-lg sheet-safe sm:rounded-xl"
+        class="flex max-h-dvh w-full max-w-xl flex-col gap-space-md rounded-t-xl border border-white/15 bg-surface-container p-space-lg sheet-safe sm:rounded-xl"
       >
         <header class="flex items-start justify-between gap-space-md">
           <div class="flex flex-col">
@@ -174,6 +215,14 @@ async function send() {
           above for the IME reason. Both events are bound: `input` covers
           ordinary typing and paste, `compositionupdate` covers the Android
           predictive keyboard's uncommitted word.
+
+          `min-h-0` is what makes the textarea the part that gives way when the
+          keyboard squeezes the sheet. A flex item defaults to `min-height:
+          auto`, which refuses to shrink below its content — here seven rows —
+          so without it the sheet would overflow and something else would have
+          to go off-screen. With it, the header, the Paste button and Send all
+          stay put and the typing area gets smaller, which is the right thing to
+          sacrifice; `overflow-y-auto` keeps the text scrollable at any height.
         -->
         <textarea
           ref="textarea"
@@ -182,15 +231,22 @@ async function send() {
           @input="syncText"
           @compositionupdate="syncText"
           data-selectable
-          placeholder="Paste a URL, a token, a snippet of code…"
-          class="w-full resize-none rounded-md border border-outline-variant/40 bg-surface-container-lowest p-space-md font-body-md text-body-md text-on-surface placeholder:text-outline focus:border-secondary-container focus:outline-none"
+          placeholder="Paste a URL, a token, a snippet of code… or several"
+          class="min-h-0 w-full resize-none overflow-y-auto rounded-md border border-outline-variant/40 bg-surface-container-lowest p-space-md font-body-md text-body-md text-on-surface placeholder:text-outline focus:border-secondary-container focus:outline-none"
         />
 
         <div class="flex items-center justify-between gap-space-md">
           <div class="flex items-center gap-space-sm">
+            <!--
+              The tooltip states that this appends. "Paste" conventionally
+              replaces a selection, so the behaviour is worth spelling out —
+              but the label stays familiar rather than becoming "Append
+              clipboard", which reads like a developer wrote it.
+            -->
             <button
               type="button"
               class="flex items-center gap-space-xs rounded-md bg-surface-container-high px-space-md py-space-sm font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-bright"
+              title="Adds the clipboard to the end — paste several times to send them together"
               @click="paste"
             >
               <ClipboardPaste :size="16" />

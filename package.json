@@ -1,6 +1,6 @@
 {
   "name": "localdrop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Zero-configuration LAN file and text transfer",
   "type": "module",

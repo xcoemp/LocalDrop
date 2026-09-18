@@ -39,11 +39,23 @@ const accents = {
     toast: the stack spans a wide fixed region, and without this the empty space
     beside a toast would swallow clicks meant for the UI underneath.
 
+    That only covers the empty space, though — a toast itself must stay
+    clickable to be dismissed, so it still blocks whatever is under it. Hence
+    `.toast-stack` (style.css) rather than a plain `bottom-*`: on mobile it
+    offsets the whole stack above the bottom navigation and the system gesture
+    inset, so the two never occupy the same pixels.
+
     aria-live="polite" announces new toasts to a screen reader without
     interrupting whatever is being read (UI-7).
+
+    No `w-full`: `.toast-stack` anchors both left and right, so the width comes
+    from the space between them. `w-full` would force 100% of the viewport on
+    top of those offsets and push the stack off the left edge — see the note in
+    style.css. `max-w-sm` then caps it on a desktop window, and `ml-auto` sends
+    the slack to the left so it stays bottom-right there.
   -->
   <div
-    class="pointer-events-none fixed bottom-space-lg right-space-lg z-70 flex w-full max-w-sm flex-col gap-space-sm"
+    class="toast-stack pointer-events-none fixed z-70 ml-auto flex max-w-sm flex-col gap-space-sm"
     role="status"
     aria-live="polite"
   >
@@ -83,13 +95,16 @@ const accents = {
           </span>
 
           <!--
-            FR-5.6 — the error code, present only on failures. `data-selectable`
-            re-enables text selection (the app disables it globally to feel
-            native) precisely so this code can be copied into a bug report.
+            No copy-details action here, deliberately.
+
+            A toast lasts a few seconds and can be one of a stack of three; an
+            action inside it is something the user has to catch before it
+            disappears, which makes it a poor home for anything worth keeping.
+            `toast.code` and `toast.detail` are still carried on the payload and
+            are still reachable — HistoryRow exposes them on the matching entry,
+            which persists and can be read at leisure. So the toast stays a
+            plain statement of what happened.
           -->
-          <span v-if="toast.code" data-selectable class="telemetry text-outline">
-            {{ toast.code }}
-          </span>
         </div>
 
         <!-- Manual dismissal, in addition to the store's TTL timer. -->

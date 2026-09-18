@@ -10,7 +10,7 @@ import { computed, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { ChevronUp, File, Folder, X } from "lucide-vue-next";
 
-import { formatBytes, truncateMiddle } from "@/composables/useFormat";
+import { formatBytes } from "@/composables/useFormat";
 import { useTransferStore } from "@/stores/useTransferStore";
 
 /**
@@ -169,11 +169,19 @@ function confirm() {
             <h2 class="font-headline-lg text-headline-lg text-on-surface">
               {{ mode === "directory" ? "Choose folder" : "Choose files" }}
             </h2>
-            <!-- Current path, middle-truncated to fit; the full value stays
-                 available as a tooltip. An ellipsis stands in until the first
-                 listing arrives. -->
-            <span class="telemetry truncate text-on-surface-variant" :title="listing?.path">
-              {{ listing ? truncateMiddle(listing.path, 44) : "…" }}
+            <!--
+              Current path. Wraps so a deep folder is readable on a phone,
+              where there is no hover to reveal the tooltip — but clamped to two
+              lines, because this header does not scroll: an unbounded path on a
+              nested Android directory would grow it far enough to push Confirm
+              and Cancel past the bottom of the sheet. An ellipsis stands in
+              until the first listing arrives.
+            -->
+            <span
+              class="telemetry line-clamp-2 wrap-anywhere text-on-surface-variant"
+              :title="listing?.path"
+            >
+              {{ listing?.path ?? "…" }}
             </span>
           </div>
           <button
@@ -235,7 +243,7 @@ function confirm() {
             v-for="entry in listing?.entries ?? []"
             :key="entry.path"
             type="button"
-            class="flex items-center gap-space-sm rounded-md p-space-sm text-left transition-colors"
+            class="flex items-start gap-space-sm rounded-md p-space-sm text-left transition-colors"
             :class="
               selected.has(entry.path)
                 ? 'bg-primary-container/25 ring-1 ring-primary/50'
@@ -248,15 +256,17 @@ function confirm() {
             <component
               :is="entry.isDir ? Folder : File"
               :size="18"
-              class="shrink-0"
+              class="mt-0.5 shrink-0"
               :class="entry.isDir ? 'text-primary' : 'text-on-surface-variant'"
             />
-            <span class="min-w-0 flex-1 truncate font-body-md text-body-md text-on-surface">
+            <!-- Wraps: picking the right file means reading its whole name,
+                 and these rows are the picker itself. -->
+            <span class="min-w-0 flex-1 wrap-anywhere font-body-md text-body-md text-on-surface">
               {{ entry.name }}
             </span>
             <!-- Size only for files. Rust reports 0 for directories rather than
                  recursing, and "0 B" beside a folder would be misleading. -->
-            <span v-if="!entry.isDir" class="telemetry shrink-0 text-outline">
+            <span v-if="!entry.isDir" class="telemetry mt-0.5 shrink-0 text-outline">
               {{ formatBytes(entry.size) }}
             </span>
           </button>

@@ -10,21 +10,36 @@
 -->
 <script setup lang="ts">
 import { computed } from "vue";
-import { Activity, Inbox, Trash2 } from "lucide-vue-next";
+import { Activity, Folder, Inbox, Trash2 } from "lucide-vue-next";
 
 import EmptyState from "@/components/EmptyState.vue";
 import HistoryRow from "@/components/HistoryRow.vue";
 import TransferRow from "@/components/TransferRow.vue";
 import { formatBitrate, formatRate } from "@/composables/useFormat";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useTransferStore } from "@/stores/useTransferStore";
 
 const transfers = useTransferStore();
+const settings = useSettingsStore();
 
 /** FR-5.3 — aggregate throughput across every live stream. */
 const aggregate = computed(() => transfers.aggregateRate);
 // `running`, not `activeList`: rows linger for 4 s after finishing, and
 // counting those as channels would overstate what is actually in flight.
 const channels = computed(() => transfers.running.length);
+
+/**
+ * FR-6.2's download directory, surfaced next to the completed list.
+ *
+ * This is the screen a user lands on when a transfer finishes and their next
+ * question is "so where is it?" — on Android especially, where there is no
+ * reveal-in-folder action to answer it for them. Reads the live setting rather
+ * than a copy, so changing the folder updates the label immediately.
+ *
+ * Empty string until the store hydrates, which the template treats as
+ * "nothing to show" rather than rendering a bare label with no path.
+ */
+const downloadDir = computed(() => settings.settings?.downloadDirectory ?? "");
 </script>
 
 <template>
@@ -72,10 +87,17 @@ const channels = computed(() => transfers.running.length);
           </span>
         </div>
 
-        <div class="telemetry flex items-center gap-space-xs text-on-surface-variant">
+        <!--
+          `flex-wrap` matters at narrow widths. Without it the three facts are
+          forced onto one line, and since they cannot move they each break
+          internally instead — "0 active\nchannels", "TCP chunks\n128 KB".
+          Wrapping lets the row break at the bullet separators, which is where
+          a reader expects it.
+        -->
+        <div class="telemetry flex flex-wrap items-center gap-space-xs text-on-surface-variant">
           <!-- Inline pluralisation; the two facts beside it are constants from
                §6.3, included because the mockup shows the transport in use. -->
-          <span class="font-semibold text-primary">
+          <span class="whitespace-nowrap font-semibold text-primary">
             {{ channels }} active channel{{ channels === 1 ? "" : "s" }}
           </span>
           <span>•</span>
@@ -138,6 +160,52 @@ const channels = computed(() => transfers.running.length);
           <Trash2 :size="14" />
           <span>Clear history</span>
         </button>
+      </div>
+
+      <!--
+        Where received files land. Shown above the list rather than inside the
+        header row, which already carries Clear history and would crowd.
+
+        Rendered whether or not there is any history: with an empty list it
+        still answers "where will things arrive?", and with a full one it
+        answers "where did they go?".
+
+        Deliberately says *received*: outgoing entries in the list below were
+        read from wherever the sender picked them, not from here.
+
+        LAYOUT: the path wraps, it does not truncate. An earlier version was a
+        flex row with `shrink-0` on the label and a character-count truncation
+        on the path, which overflowed horizontally in a narrow window — and
+        because the overflow widened the whole page, it dragged the section
+        headings off the left edge rather than just clipping the path.
+        So: `min-w-0` on both the flex child and the paragraph (a flex item
+        defaults to `min-width: auto` and refuses to shrink below its content),
+        the label and path as normal inline text in one <p> so they reflow
+        together, and `wrap-anywhere` so a path with no spaces still breaks
+        rather than pushing the layout wide. `wrap-anywhere` in preference to
+        `break-all`, which breaks mid-word even where a break is unnecessary and
+        would split "Downloads" across two lines for no reason.
+        Full value stays in the tooltip, and
+        `data-selectable` re-enables selection (the app suppresses it globally)
+        so the path can be copied into a file manager.
+
+        `block sm:inline` on the path puts it on its own line below sm. Inline
+        on a phone, the sentence ran the label and the path together and the
+        path then broke mid-way through, so neither read cleanly; a line of its
+        own gives it the full width and usually removes the break entirely.
+        Above sm there is room for one line, and inline is tidier.
+      -->
+      <div v-if="downloadDir" class="flex min-w-0 items-start gap-space-xs px-space-xs">
+        <Folder :size="14" class="mt-0.5 shrink-0 text-outline" />
+        <p class="min-w-0 font-body-sm text-body-sm text-on-surface-variant">
+          Received files are saved to
+          <span
+            data-selectable
+            class="telemetry block wrap-anywhere text-on-surface sm:inline"
+            :title="downloadDir"
+            >{{ downloadDir }}</span
+          >
+        </p>
       </div>
 
       <EmptyState
