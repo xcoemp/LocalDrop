@@ -21,7 +21,11 @@ src-tauri/gen/
 # update that Android accepts as genuine. Keep them backed up somewhere else.
 *.jks
 *.keystore
-src-tauri/keystore.properties
+# Unanchored on purpose. This was `src-tauri/keystore.properties`, which left a
+# copy at the repo root - the plaintext store and key passwords - untracked but
+# NOT ignored, one `git add -A` away from being published. The file belongs in
+# src-tauri/, but the ignore rule should not be what enforces that.
+keystore.properties
 *.pfx
 *.p12
 
@@ -34,6 +38,7 @@ deploy/
 # its content with a link into one of these files.
 #
 #   docs/BUILDING.md        full build reference, disk budgets, NDK failure modes
+#   docs/SIGNING.md         Azure Artifact Signing + Android keystore setup
 #   docs/USER_GUIDE.md      end-user guide
 #   docs/REQYUIREMENTS..md  product requirements document
 #   docs/BETA_TESTING.md    tester-facing QA checklist for the 1.0.0 beta
@@ -48,4 +53,9 @@ docs/
 
 # NOTE: this also excludes README.md, so the repository would have NO landing
 # page or build instructions on GitHub at all. Delete this line to publish it.
-README.md
+#
+# Anchored with a leading slash so it means "the README at the repo root" and
+# not "every README.md anywhere". Unanchored, it also swallowed
+# src-tauri/android-kit/README.md -- which the note above deliberately wants
+# shipped, because the Android build cannot be completed without those files.
+

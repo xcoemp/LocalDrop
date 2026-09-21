@@ -1,8 +1,17 @@
 <!--
-  PRD §7.2 — merge into gen/android/app/src/main/AndroidManifest.xml.
+  PRD 7.2 - merge into gen/android/app/src/main/AndroidManifest.xml.
 
   Permissions go directly inside <manifest>, before <application>.
   The <service> declaration goes inside <application>.
+
+  The <manifest> root also needs the tools namespace, which the generated file
+  does not have:
+
+      <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+
+  Without it the tools:ignore below is an unresolved-prefix error and the
+  manifest merger fails.
 -->
 
 <!-- ===== inside <manifest> ===== -->
@@ -14,15 +23,43 @@
      UDP broadcast is silently dropped by power management. -->
 <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
-<!-- AND-2: keeps the TCP socket alive while backgrounded. -->
+<!-- AND-2: keeps the TCP socket alive while backgrounded. WAKE_LOCK backs the
+     PARTIAL_WAKE_LOCK that LocalDropService holds for the duration of a
+     transfer; without it the OS suspends the sockets mid-send. -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+
+<!-- Backs LocalDropService.requestIgnoreBatteryOptimizations(). Without it
+     ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS throws and only the generic
+     settings-list fallback is reachable. -->
+<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
 <!-- AND-3: runtime prompt from API 33. Transfers still work if declined. -->
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+<!-- All-files access, used by LocalDropStorage. Under scoped storage the app
+     can enumerate directories but cannot read files it did not create, so
+     sending a folder walks the tree, builds a manifest, then skips every file
+     and transfers nothing. Cannot be requested with a runtime dialog:
+     MainActivity.onResume sends the user to Settings once per session.
+
+     tools:ignore silences the Play-policy lint. This permission requires
+     written justification if the app is ever published rather than sideloaded.
+     See docs/BUILDING.md -> Android storage model. -->
+<uses-permission
+    android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+    tools:ignore="ScopedStorage" />
+
 <!-- ===== inside <application> ===== -->
+<!--
+  android:name must match the Kotlin class in LocalDropService.kt, which is
+  `LocalDropService`. An earlier revision of this file said `.TransferService`;
+  that name matches no class, so the app builds and installs fine and then
+  throws ClassNotFoundException the first time a transfer tries to start the
+  service. Nothing catches it at build time.
+-->
 <service
-    android:name=".TransferService"
+    android:name=".LocalDropService"
     android:exported="false"
     android:foregroundServiceType="dataSync" />

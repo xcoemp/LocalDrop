@@ -66,19 +66,36 @@
     Builds the .msi and NSIS .exe, signing them if a certificate is configured.
 
 .NOTES
-    Windows code signing reads these environment variables:
+    Windows code signing reads these environment variables. Three mutually
+    exclusive modes, checked in this order. See docs/SIGNING.md for the full
+    setup of each.
+
+    1. Azure Artifact Signing (formerly Trusted Signing) -- recommended:
+
+      LOCALDROP_WIN_AZURE_DLIB       path to Azure.CodeSigning.Dlib.dll
+      LOCALDROP_WIN_AZURE_METADATA   path to metadata.json naming the account,
+                                     certificate profile, and region endpoint
+
+    2. A certificate already in the user's store, for a hardware token or HSM:
+
+      LOCALDROP_WIN_CERT_THUMBPRINT  its SHA-1 thumbprint
+
+    3. A certificate file:
 
       LOCALDROP_WIN_CERT             path to a .pfx / .p12 file
       LOCALDROP_WIN_CERT_PASSWORD    its password
-      LOCALDROP_WIN_CERT_THUMBPRINT  alternative: SHA-1 thumbprint of a
-                                     certificate already in the user's store
-                                     (use this for a hardware token or HSM)
-      LOCALDROP_WIN_TIMESTAMP_URL    RFC 3161 timestamp server; defaults to
-                                     http://timestamp.digicert.com
+
+    And, for all three:
+
+      LOCALDROP_WIN_TIMESTAMP_URL    RFC 3161 timestamp server. Defaults to
+                                     http://timestamp.acs.microsoft.com in
+                                     Azure mode and
+                                     http://timestamp.digicert.com otherwise.
 
     A timestamp matters more than it looks: without one, every signature stops
     validating the day the certificate expires, including on copies already
-    downloaded.
+    downloaded. With Artifact Signing it is not optional at all -- those
+    certificates are valid for about three days.
 #>
 
 [CmdletBinding()]
@@ -96,7 +113,7 @@ param(
 # NOTE ON INVOCATION: do not use `pnpm deploy:android -- -AllowDebugKey`.
 #
 # pnpm forwards the `--` separator itself, and PowerShell's parameter binder
-# rejects a bare `--` as an ambiguous parameter name *before* this script runs —
+# rejects a bare `--` as an ambiguous parameter name *before* this script runs -
 # so no amount of in-script argument handling can absorb it. A
 # ValueFromRemainingArguments catch-all does not help for the same reason.
 #
@@ -107,6 +124,44 @@ param(
 #     -File scripts/package-release.ps1 -Target android -AllowDebugKey
 
 $ErrorActionPreference = 'Stop'
+
+# -- Module path -----------------------------------------------------------
+# Windows PowerShell inherits PSModulePath from whatever launched it. When that
+# is PowerShell 7 - directly, or through pnpm, which is how every deploy script
+# runs - the PS7 module directory comes FIRST, so powershell.exe loads
+# Microsoft.PowerShell.Utility 7.0.0.0 instead of its own 3.1.0.0. The 5.1
+# engine cannot load that manifest, and it fails silently and partially:
+#
+#   - every *binary* Utility cmdlet still works, because it is already in the
+#     initial session state (Copy-Item, Get-ChildItem, ConvertFrom-Json, ...)
+#   - every *script function* the module would have exported is simply absent
+#
+# Get-FileHash is one of the latter, so the only visible symptom is
+#
+#   The term 'Get-FileHash' is not recognized as the name of a cmdlet ...
+#
+# thrown from a script where a dozen other Utility commands ran fine seconds
+# earlier - and only when run via pnpm, never when run by hand from a plain
+# Windows PowerShell prompt. Format-Hex and Import-PowerShellDataFile break the
+# same way. The Windows build was collected but never published, and the run
+# reported "No artifacts produced."
+#
+# Putting $PSHOME\Modules first makes this engine's own modules win. The value
+# is exported, so the child build processes inherit the repaired list too.
+$psHomeModules = Join-Path $PSHOME 'Modules'
+$env:PSModulePath = (@($psHomeModules) + (($env:PSModulePath -split ';') |
+        Where-Object { $_ -and $_ -ne $psHomeModules })) -join ';'
+
+# The wrong module may already have been resolved before the line above ran, so
+# repair the session as well as the path for any child.
+if (-not (Get-Command Get-FileHash -ErrorAction SilentlyContinue)) {
+    Remove-Module Microsoft.PowerShell.Utility -Force -ErrorAction SilentlyContinue
+    Import-Module (Join-Path $psHomeModules 'Microsoft.PowerShell.Utility') -Force -ErrorAction SilentlyContinue
+
+    if (-not (Get-Command Get-FileHash -ErrorAction SilentlyContinue)) {
+        throw "Get-FileHash is unavailable and Microsoft.PowerShell.Utility could not be reloaded from $psHomeModules."
+    }
+}
 
 $scriptDir = $PSScriptRoot
 $repoRoot = Split-Path $scriptDir -Parent
@@ -409,15 +464,70 @@ function Invoke-WindowsRelease {
     # -- Certificate -------------------------------------------------------
     # Resolved once, before signing anything, so a misconfigured certificate is
     # reported as one problem rather than once per artifact.
+    #
+    # Three mutually exclusive modes, checked in this order:
+    #
+    #   1. Azure Artifact Signing (formerly Trusted Signing). No certificate
+    #      file exists at all: signtool calls out to the service through a
+    #      "dlib" plugin, and the certificate is minted per signature and never
+    #      leaves Microsoft. This is the recommended path - see docs/SIGNING.md.
+    #   2. A certificate already in the user's store, by SHA-1 thumbprint. Use
+    #      this for a hardware token or HSM, where the private key cannot be
+    #      exported to a file.
+    #   3. A .pfx / .p12 file plus its password.
     $signTool = Get-SignTool
+    $azureDlib = $env:LOCALDROP_WIN_AZURE_DLIB
+    $azureMetadata = $env:LOCALDROP_WIN_AZURE_METADATA
     $certFile = $env:LOCALDROP_WIN_CERT
     $certPass = $env:LOCALDROP_WIN_CERT_PASSWORD
     $certThumb = $env:LOCALDROP_WIN_CERT_THUMBPRINT
-    $timestampUrl = if ($env:LOCALDROP_WIN_TIMESTAMP_URL) { $env:LOCALDROP_WIN_TIMESTAMP_URL } else { 'http://timestamp.digicert.com' }
 
+    # Artifact Signing certificates are valid for roughly three days, so an
+    # untimestamped signature stops validating almost immediately. Microsoft's
+    # own timestamp authority is the documented default for that service;
+    # DigiCert's remains the default for an ordinary certificate.
+    $defaultTimestamp = if ($azureDlib) { 'http://timestamp.acs.microsoft.com' } else { 'http://timestamp.digicert.com' }
+    $timestampUrl = if ($env:LOCALDROP_WIN_TIMESTAMP_URL) { $env:LOCALDROP_WIN_TIMESTAMP_URL } else { $defaultTimestamp }
+
+    $useAzure = $false
     $canSign = $false
     if (-not $signTool) {
         Write-Note 'signtool.exe not found in any Windows SDK; artifacts will be unsigned.'
+    }
+    elseif ($azureDlib -or $azureMetadata) {
+        # Reported as a problem rather than silently falling through to
+        # "unsigned": a half-configured service is a mistake, not a choice.
+        if (-not $azureDlib) {
+            Add-Problem 'LOCALDROP_WIN_AZURE_METADATA is set but LOCALDROP_WIN_AZURE_DLIB is not.'
+        }
+        elseif (-not $azureMetadata) {
+            Add-Problem 'LOCALDROP_WIN_AZURE_DLIB is set but LOCALDROP_WIN_AZURE_METADATA is not.'
+        }
+        elseif (-not (Test-Path $azureDlib)) {
+            Add-Problem "LOCALDROP_WIN_AZURE_DLIB points at a missing file: $azureDlib"
+        }
+        elseif (-not (Test-Path $azureMetadata)) {
+            Add-Problem "LOCALDROP_WIN_AZURE_METADATA points at a missing file: $azureMetadata"
+        }
+        else {
+            $useAzure = $true
+            $canSign = $true
+            Write-Note 'Signing with Azure Artifact Signing.'
+
+            # The dlib refuses to load into an older signtool, and the error it
+            # produces names neither the SDK nor the version: it says "No
+            # certificates were found that met all the given criteria", which
+            # reads as a problem with the Azure account. The SDK build number
+            # is in the path, so check it up front. 20348 is explicitly
+            # unsupported; 22621 is the documented floor.
+            if ($signTool -match '\\bin\\(\d+\.\d+\.(\d+)\.\d+)\\') {
+                $sdkFull = $Matches[1]
+                if ([int]$Matches[2] -lt 22621) {
+                    Write-Warn "signtool is from Windows SDK $sdkFull; the Artifact Signing dlib needs 10.0.22621 or newer."
+                    Write-Note 'Expect "No certificates were found that met all the given criteria" if this is too old.'
+                }
+            }
+        }
     }
     elseif ($certThumb) {
         $canSign = $true
@@ -465,7 +575,10 @@ function Invoke-WindowsRelease {
         $signing = 'unsigned'
         if ($canSign) {
             $signArgs = @('sign', '/fd', 'SHA256', '/td', 'SHA256', '/tr', $timestampUrl)
-            if ($certThumb) {
+            if ($useAzure) {
+                $signArgs += @('/dlib', $azureDlib, '/dmdf', $azureMetadata)
+            }
+            elseif ($certThumb) {
                 $signArgs += @('/sha1', $certThumb)
             }
             else {
@@ -474,9 +587,21 @@ function Invoke-WindowsRelease {
             }
             $signArgs += $destination
 
-            & $signTool @signArgs | Out-Null
+            # Output is captured rather than discarded so a failure can show
+            # why. Azure failures in particular are a bare HTTP status - 403 is
+            # a missing role assignment or a region/endpoint mismatch, and
+            # without the output there is nothing to go on. Only printed on
+            # failure, because a successful sign is very noisy.
+            #
+            # The nested scope is load-bearing. Merging a native program's
+            # stderr with 2>&1 while $ErrorActionPreference is 'Stop' turns
+            # each stderr line into a terminating error, so signtool writing a
+            # diagnostic would abort the whole Windows target instead of being
+            # collected as one problem and letting the other artifact proceed.
+            $signOutput = & { $ErrorActionPreference = 'Continue'; & $signTool @signArgs 2>&1 }
             if ($LASTEXITCODE -ne 0) {
                 Add-Problem "signtool failed for $($t.Name); leaving it unsigned."
+                $signOutput | ForEach-Object { Write-Note $_ }
             }
             else {
                 # Verified with /pa (default authenticode policy), which is what
@@ -486,7 +611,7 @@ function Invoke-WindowsRelease {
                     Add-Problem "Signature verification failed for $($t.Name)."
                 }
                 else {
-                    $signing = 'authenticode + timestamp'
+                    $signing = if ($useAzure) { 'azure artifact signing + timestamp' } else { 'authenticode + timestamp' }
                 }
             }
         }

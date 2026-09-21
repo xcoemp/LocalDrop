@@ -39,6 +39,22 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# -- Module path -----------------------------------------------------------
+# Launched from PowerShell 7 (or from pnpm, which inherits PS7's environment),
+# Windows PowerShell receives a PSModulePath whose first entry is the PS7
+# module directory. It then loads PS7's Microsoft.PowerShell.Utility, which the
+# 5.1 engine cannot use: binary cmdlets keep working because they are already
+# in the session state, while the script functions the module exports -
+# Get-FileHash, Format-Hex, Import-PowerShellDataFile - go missing with a bare
+# "is not recognized as the name of a cmdlet" and no hint of a module clash.
+#
+# Repaired here as well as in package-release.ps1 so that every build launched
+# through this wrapper, and anything Gradle or Tauri spawn underneath it,
+# inherits a PSModulePath that resolves to the running engine's own modules.
+$psHomeModules = Join-Path $PSHOME 'Modules'
+$env:PSModulePath = (@($psHomeModules) + (($env:PSModulePath -split ';') |
+        Where-Object { $_ -and $_ -ne $psHomeModules })) -join ';'
+
 # -- Rust on PATH ----------------------------------------------------------
 $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
 if ((Test-Path $cargoBin) -and ($env:PATH -notlike "*$cargoBin*")) {
@@ -73,9 +89,13 @@ if (-not $env:LIB) {
 
     # Run vcvars in cmd, dump the resulting environment, and import it here.
     # `set` output is KEY=VALUE per line; values may themselves contain '='.
+    #
+    # PSModulePath is skipped. vcvars does not set it, but cmd inherited the
+    # unrepaired value and dumps it back out, so importing it blindly would
+    # undo the fix above and reintroduce the missing-Get-FileHash failure.
     & cmd /c "`"$vcvars`" >nul 2>&1 && set" | ForEach-Object {
         $pair = $_.Split('=', 2)
-        if ($pair.Length -eq 2) {
+        if ($pair.Length -eq 2 -and $pair[0] -ne 'PSModulePath') {
             Set-Item -Path "env:$($pair[0])" -Value $pair[1] -ErrorAction SilentlyContinue
         }
     }
